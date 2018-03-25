@@ -4,10 +4,9 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include "Eigen-3.3/Eigen/Core"
-#include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
 #include "json.hpp"
+#include "polyutils.h"
 
 // for convenience
 using json = nlohmann::json;
@@ -30,39 +29,6 @@ string hasData(string s) {
     return s.substr(b1, b2 - b1 + 2);
   }
   return "";
-}
-
-// Evaluate a polynomial.
-double polyeval(Eigen::VectorXd coeffs, double x) {
-  double result = 0.0;
-  for (int i = 0; i < coeffs.size(); i++) {
-    result += coeffs[i] * pow(x, i);
-  }
-  return result;
-}
-
-// Fit a polynomial.
-// Adapted from
-// https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
-Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
-                        int order) {
-  assert(xvals.size() == yvals.size());
-  assert(order >= 1 && order <= xvals.size() - 1);
-  Eigen::MatrixXd A(xvals.size(), order + 1);
-
-  for (int i = 0; i < xvals.size(); i++) {
-    A(i, 0) = 1.0;
-  }
-
-  for (int j = 0; j < xvals.size(); j++) {
-    for (int i = 0; i < order; i++) {
-      A(j, i + 1) = A(j, i) * xvals(j);
-    }
-  }
-
-  auto Q = A.householderQr();
-  auto result = Q.solve(yvals);
-  return result;
 }
 
 int main() {
@@ -103,6 +69,13 @@ int main() {
     double py = j[1]["y"];
     double psi = j[1]["psi"];
     double v = j[1]["speed"];
+
+    // Fit a third-degree polynomial to the waypoints.
+    auto coeffs = poly_fit(ptsx, ptsy, 3);
+
+    // Calculate the initial cte and epsi. (Always using actual - target)
+    double cte = py - poly_eval(coeffs, px);
+    double epsi = psi - atan(poly_deriv_1(coeffs, px));
 
     /*
     * TODO: Calculate steering angle and throttle using MPC.

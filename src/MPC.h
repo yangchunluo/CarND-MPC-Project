@@ -1,5 +1,4 @@
-#ifndef MPC_H
-#define MPC_H
+#pragma once
 
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
@@ -16,5 +15,3 @@ class MPC {
   // Return the first actuatotions.
   vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
 };
-
-#endif /* MPC_H */
