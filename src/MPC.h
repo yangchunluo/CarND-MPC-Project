@@ -5,6 +5,13 @@
 
 using namespace std;
 
+struct SolverResult {
+  double steering;
+  double throttle;
+  vector<double> xpos;
+  vector<double> ypos;
+};
+
 class MPC {
  public:
   MPC();
@@ -13,5 +20,5 @@ class MPC {
 
   // Solve the model given an initial state and polynomial coefficients.
   // Return the first actuatotions.
-  vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
+  SolverResult Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
 };
