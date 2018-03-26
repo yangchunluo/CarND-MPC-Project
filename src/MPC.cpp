@@ -24,7 +24,7 @@ const double Lf = 2.67;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set here.
-double ref_velocity = 5;
+const double ref_velocity = 40;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -110,19 +110,16 @@ public:
       // Evalute the polynomial at time t: f(x0) and f'(x0).
       // However, we should abstain from using poly_eval() and poly_deriv_1() because we
       // need to rely on x0 being AD<double> for auto-differentiation.
-      // AD<double> poly_val = coeffs[0];
-      // AD<double> poly_der = 0;
-      // AD<double> running_pow = 1;
-      // for (int i = 1; i < coeffs.size(); i++) {
-      //   poly_val += coeffs[i] * (running_pow * x0);
-      //   poly_der += i * coeffs[i] * running_pow;
-      //   running_pow *= x0;
-      // }
-      assert(coeffs.size() == 4);
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) +
-                      coeffs[3] * CppAD::pow(x0, 3);
-      AD<double> psides0 = CppAD::atan(coeffs[1] + x0 * coeffs[2] * 2 +
-                       CppAD::pow(x0, 2) * coeffs[3] * 3);
+      AD<double> poly_val = coeffs[0];
+      AD<double> poly_der = 0;
+      AD<double> running_pow = 1;
+      for (int i = 1; i < coeffs.size(); i++) {
+        poly_val += coeffs[i] * (running_pow * x0);
+        poly_der += i * coeffs[i] * running_pow;
+        running_pow *= x0;
+      }
+      AD<double> f0 = poly_val;
+      AD<double> psides0 = CppAD::atan(poly_der);
 
       // Vehicle states at time t+1.
       AD<double> x1 = vars[x_start + t];
@@ -178,12 +175,6 @@ SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   for (int i = 0; i < n_vars; i++) {
     vars[i] = 0;
   }
-  vars[x_start] = x;
-  vars[y_start] = y;
-  vars[psi_start] = psi;
-  vars[v_start] = v;
-  vars[cte_start] = cte;
-  vars[epsi_start] = epsi;
 
   // Set lower and upper limits for variables.
   Dvector vars_lowerbound(n_vars);
@@ -237,9 +228,9 @@ SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // magnitude.
   options += "Sparse  true        forward\n";
   options += "Sparse  true        reverse\n";
-  // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
-  // Change this as you see fit.
-  options += "Numeric max_cpu_time          60\n";
+  // FIXME: I suspect that max_cpu_time is internally cached like a static variable.
+  //        We must find an API to reset it before each call to the solver.
+  // options += "Numeric max_cpu_time          0.5\n";
 
   // Solve the problem
   CppAD::ipopt::solve_result<Dvector> solution;

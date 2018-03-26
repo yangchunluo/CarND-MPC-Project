@@ -43,7 +43,6 @@ inline double map_to_vehicle_coordinate_y(double mx, double my,
   return (my - vy) * cos(vpsi) - (mx - vx) * sin(vpsi);
 }
 
-
 int main() {
   uWS::Hub h;
 
@@ -83,18 +82,27 @@ int main() {
     double psi = j[1]["psi"];
     double v = j[1]["speed"];
 
-    // Fit a third-degree polynomial to the waypoints.
+    // Translate waypoints from map to vehicle coordinate system.
+    for (int i = 0; i < ptsx.size(); i++) {
+      double mx = ptsx[i],
+             my = ptsy[i];
+      ptsx[i] = map_to_vehicle_coordinate_x(mx, my, px, py, psi);
+      ptsy[i] = map_to_vehicle_coordinate_y(mx, my, px, py, psi);
+    }
+    // Now, for the initial state, x = y = psi = 0.
+
+    // Fit a third-degree polynomial to the translated waypoints.
     auto coeffs = poly_fit(ptsx, ptsy, 3);
 
     // Calculate the initial cte and epsi. (Always using actual - reference)
-    double cte = py - poly_eval(coeffs, px);
-    double epsi = psi - atan(poly_deriv_1(coeffs, px));
+    double cte = 0 /* y */ - poly_eval(coeffs, 0 /* x */);
+    double epsi = 0 /* psi */ - atan(poly_deriv_1(coeffs, 0 /* x */));
 
-    // Assumble the states.
+    // Assumble the initiate states.
     Eigen::VectorXd state(6);
-    state << px,   // Vehicle's x coorindate
-             py,   // Vehicle's y coorindate
-             psi,  // Vehicle's heading direction
+    state << 0,    // Vehicle's x coorindate
+             0,    // Vehicle's y coorindate
+             0,    // Vehicle's heading direction
              v,    // Vehicle velocity
              cte,  // Crosstrek error
              epsi; // Heading error
@@ -109,32 +117,23 @@ int main() {
     msgJson["throttle"] = res.throttle;
 
     /*
-     * Display MPC predicted trajectory by converting solver returned points from map's coordinate
-     * system to vehicle's coorindate system.
-     *
+     * Display MPC predicted trajectory, whose length is proportional to the velocity.
      * In the simulation, these points will be connected by a green line.
      */
-    vector<double> mpc_x_vals;
-    vector<double> mpc_y_vals;
-    for (int i = 0; i < res.xpos.size(); i++) {
-      mpc_x_vals.push_back(map_to_vehicle_coordinate_x(res.xpos[i], res.ypos[i], px, py, psi));
-      mpc_y_vals.push_back(map_to_vehicle_coordinate_y(res.xpos[i], res.ypos[i], px, py, psi));
-    }
-    msgJson["mpc_x"] = mpc_x_vals;
-    msgJson["mpc_y"] = mpc_y_vals;
+    msgJson["mpc_x"] = res.xpos;
+    msgJson["mpc_y"] = res.ypos;
 
     /*
-     * Display the waypoints/reference line by converting ptsx and ptsy from map's coordinate
-     * system to vehicle's coorindate system.
-     *
+     * Display the waypoints/reference line. Use the fitted polynomial.
      * In the simulation, these points will be connected by a yellow line.
      */
     vector<double> next_x_vals;
     vector<double> next_y_vals;
-    for (int i = 0; i < ptsx.size(); i++) {
-      double y = poly_eval(coeffs, ptsx[i]);  // or ptsy[i]?
-      next_x_vals.push_back(map_to_vehicle_coordinate_x(ptsx[i], y, px, py, psi));
-      next_y_vals.push_back(map_to_vehicle_coordinate_y(ptsx[i], y, px, py, psi));
+    const double x_inc = 2.5; /* meters. */
+    const int num_points = 40;
+    for (int i = 0; i < num_points; i++) {
+      next_x_vals.push_back(x_inc * i);
+      next_y_vals.push_back(poly_eval(coeffs, x_inc * i));
     }
     msgJson["next_x"] = next_x_vals;
     msgJson["next_y"] = next_y_vals;
