@@ -24,7 +24,7 @@ const double Lf = 2.67;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set here.
-const double ref_velocity = 40;
+const double ref_velocity = 20;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -62,22 +62,22 @@ public:
 
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 2000 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 2000 * CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += CppAD::pow(vars[v_start + t] - ref_velocity, 2);
     }
 
     // Minimize the use of actuators.
     for (int t = 0; t < N - 1; t++) {
-      fg[0] += CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 5 * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 5 * CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
       // Add more penality to steering angle change.
-      fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 1000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     /*
@@ -112,12 +112,17 @@ public:
       // need to rely on x0 being AD<double> for auto-differentiation.
       AD<double> poly_val = coeffs[0];
       AD<double> poly_der = 0;
-      AD<double> running_pow = 1;
+      AD<double> curr_pow = 1;
       for (int i = 1; i < coeffs.size(); i++) {
-        poly_val += coeffs[i] * (running_pow * x0);
-        poly_der += i * coeffs[i] * running_pow;
-        running_pow *= x0;
+        AD<double> next_pow = curr_pow * x0;
+        poly_val += coeffs[i] * next_pow;
+        poly_der += i * coeffs[i] * curr_pow;
+        curr_pow = next_pow;
       }
+      // assert(coeffs.size() == 4);
+      // AD<double> poly_val = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 +
+      //                       coeffs[3] * x0 * x0 * x0;
+      // AD<double> poly_der = coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * x0 * x0;
       AD<double> f0 = poly_val;
       AD<double> psides0 = CppAD::atan(poly_der);
 
