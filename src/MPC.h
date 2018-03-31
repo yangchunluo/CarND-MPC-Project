@@ -20,5 +20,6 @@ class MPC {
 
   // Solve the model given an initial state and polynomial coefficients.
   // Return the first actuatotions.
-  SolverResult Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
+  SolverResult Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs,
+                     double max_steering, double Lf);
 };

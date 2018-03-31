@@ -10,21 +10,9 @@ using CppAD::AD;
 const size_t N = 10;
 const double dt = 0.1;
 
-// This value assumes the model presented in the classroom is used.
-//
-// It was obtained by measuring the radius formed by running the vehicle in the
-// simulator around in a circle with a constant steering angle and velocity on a
-// flat terrain.
-//
-// Lf was tuned until the the radius formed by the simulating the model
-// presented in the classroom matched the previous radius.
-//
-// This is the length from front to CoG that has a similar radius.
-const double Lf = 2.67;
-
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set here.
-const double ref_velocity = 20;
+const double ref_velocity = 45;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -42,7 +30,8 @@ class FG_eval {
 public:
   // Fitted polynomial coefficients, used in compute the desired psi (psides).
   Eigen::VectorXd coeffs;
-  FG_eval(Eigen::VectorXd coeffs) { this->coeffs = coeffs; }
+  double Lf;
+  FG_eval(Eigen::VectorXd coeffs, double Lf): coeffs(coeffs), Lf(Lf) {}
 
   // ADvector is mandated by the CppAD::ipopt interface.
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
@@ -76,7 +65,7 @@ public:
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
       // Add more penality to steering angle change.
-      fg[0] += 1000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 200 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += 10 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
@@ -120,9 +109,9 @@ public:
         curr_pow = next_pow;
       }
       // assert(coeffs.size() == 4);
-      // AD<double> poly_val = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 +
-      //                       coeffs[3] * x0 * x0 * x0;
-      // AD<double> poly_der = coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * x0 * x0;
+      // poly_val = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 +
+      //            coeffs[3] * x0 * x0 * x0;
+      // poly_der = coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * x0 * x0;
       AD<double> f0 = poly_val;
       AD<double> psides0 = CppAD::atan(poly_der);
 
@@ -159,7 +148,8 @@ public:
 MPC::MPC() {}
 MPC::~MPC() {}
 
-SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
+SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs,
+                        double max_steering, double Lf) {
   typedef CPPAD_TESTVECTOR(double) Dvector;
 
   double x = state[0];
@@ -190,8 +180,8 @@ SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   }
   // Limits of steering angle are set to -25 and 25 in degrees.
   for (int i = delta_start; i < a_start; i++) {
-    vars_lowerbound[i] = -0.436332;
-    vars_upperbound[i] = 0.436332;
+    vars_lowerbound[i] = -max_steering * Lf;
+    vars_upperbound[i] = max_steering * Lf;
   }
   // Limits of throttle/brake.
   for (int i = a_start; i < n_vars; i++) {
@@ -220,7 +210,7 @@ SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   constraints_upperbound[epsi_start] = epsi;
 
   // Object that computes objective (cost function) and constraints
-  FG_eval fg_eval(coeffs);
+  FG_eval fg_eval(coeffs, Lf);
 
   // Options for IPOPT solver
   std::string options;

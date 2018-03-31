@@ -16,6 +16,18 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+// This value assumes the model presented in the classroom is used.
+//
+// It was obtained by measuring the radius formed by running the vehicle in the
+// simulator around in a circle with a constant steering angle and velocity on a
+// flat terrain.
+//
+// Lf was tuned until the the radius formed by the simulating the model
+// presented in the classroom matched the previous radius.
+//
+// This is the length from front to CoG that has a similar radius.
+const double Lf = 2.67;
+
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -108,12 +120,12 @@ int main() {
              epsi; // Heading error
 
     // Solve MPC problem.
-    auto res = mpc.Solve(state, coeffs);
+    auto res = mpc.Solve(state, coeffs, deg2rad(25), Lf);
 
     json msgJson;
 
     // Scale the steering angle to [-1, 1]. Negate the sign due to difference with Unity.
-    msgJson["steering_angle"] = -res.steering / deg2rad(25);
+    msgJson["steering_angle"] = -res.steering / (deg2rad(25) * Lf);
     msgJson["throttle"] = res.throttle;
 
     /*
