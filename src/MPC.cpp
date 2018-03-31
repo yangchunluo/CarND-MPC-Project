@@ -12,7 +12,7 @@ const double dt = 0.1;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set here.
-const double ref_velocity = 45;
+const double ref_velocity = 100;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -108,10 +108,6 @@ public:
         poly_der += i * coeffs[i] * curr_pow;
         curr_pow = next_pow;
       }
-      // assert(coeffs.size() == 4);
-      // poly_val = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 +
-      //            coeffs[3] * x0 * x0 * x0;
-      // poly_der = coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * x0 * x0;
       AD<double> f0 = poly_val;
       AD<double> psides0 = CppAD::atan(poly_der);
 
@@ -124,7 +120,7 @@ public:
       AD<double> epsi1 = vars[epsi_start + t];
 
       // Constrain the difference to be 0 (see the solver function).
-      // Global kinetic model state transition.
+      // Global kinematic model state transition.
       //   x[t+1]    = x[t] + v[t] * cos(psi[t]) * dt
       //   y[t+1]    = y[t] + v[t] * sin(psi[t]) * dt
       //   psi[t+1]  = psi[t] + v[t] / Lf * delta[t] * dt
@@ -133,10 +129,10 @@ public:
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
       fg[1 + psi_start + t] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
-      // For the errors, always use actual - reference
+      // For error turns, always use (actual - reference).
       //   cte[t+1]  = (y[t] - f(x[t])) + v[t] * sin(epsi[t]) * dt
       //   epsi[t+1] = (psi[t] - psides[t]) + v[t] * delta[t] / Lf * dt
-      fg[1 + cte_start + t] = cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt));
+      fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
       fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
     }
   }
@@ -239,13 +235,14 @@ SolverResult MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs,
   }
 
   // Cost
-  std::cout << "Cost " << solution.obj_value << std::endl;
+  // std::cout << "Cost " << solution.obj_value << std::endl;
 
   // Return the first actuator values.
   // Also sent back are (x, y) coordinates for display.
   SolverResult res;
   res.steering = solution.x[delta_start];
   res.throttle = solution.x[a_start];
+  res.cost = solution.obj_value;
   for (int i = 1; i < N; i++) {
     res.xpos.emplace_back(solution.x[x_start + i]);
     res.ypos.emplace_back(solution.x[y_start + i]);

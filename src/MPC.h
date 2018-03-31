@@ -8,6 +8,7 @@ using namespace std;
 struct SolverResult {
   double steering;
   double throttle;
+  double cost;
   vector<double> xpos;
   vector<double> ypos;
 };

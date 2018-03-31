@@ -7,7 +7,7 @@
 #include "MPC.h"
 #include "json.hpp"
 #include "polyutils.h"
-
+#include <cassert>
 // for convenience
 using json = nlohmann::json;
 
@@ -58,16 +58,19 @@ inline double map_to_vehicle_coordinate_y(double mx, double my,
 int main() {
   uWS::Hub h;
 
+  size_t counter = 0;
+  double total_cost = 0;
+
   // MPC is initialized here!
   MPC mpc;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-                     uWS::OpCode opCode) {
+  h.onMessage([&mpc, &counter, &total_cost](
+    uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    // cout << sdata << endl;
     if (! (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2')) {
       return;
     }
@@ -93,6 +96,13 @@ int main() {
     double py = j[1]["y"];
     double psi = j[1]["psi"];
     double v = j[1]["speed"];
+    double delta = j[1]["steering_angle"];
+    double a = j[1]["throttle"];
+
+    // Steering angle sent back from Unity is of the opposite direction:
+    //   i.e. positive steering angle signifies right turn where as in our vehicle
+    //   model it means left turn.
+    delta *= -1;
 
     // Translate waypoints from map to vehicle coordinate system.
     for (int i = 0; i < ptsx.size(); i++) {
@@ -101,20 +111,31 @@ int main() {
       ptsx[i] = map_to_vehicle_coordinate_x(mx, my, px, py, psi);
       ptsy[i] = map_to_vehicle_coordinate_y(mx, my, px, py, psi);
     }
-    // Now, for the initial state, x = y = psi = 0.
+    // Now the coordinate origin is the car itself.
+    px = py = psi = 0;
 
     // Fit a third-degree polynomial to the translated waypoints.
     auto coeffs = poly_fit(ptsx, ptsy, 3);
 
-    // Calculate the initial cte and epsi. (Always using actual - reference)
-    double cte = 0 /* y */ - poly_eval(coeffs, 0 /* x */);
-    double epsi = 0 /* psi */ - atan(poly_deriv_1(coeffs, 0 /* x */));
+    // Deal with actuator latency by predicting the vehicle states in the future
+    // using the kinematic model and initialize MPC with the future states.
+    const long latencyMs = 100;
+    const double latency = latencyMs / 1000.0;
+    // Here we assume latency is very small.
+    px += v * latency;
+    py += v * latency * delta * latency;
+    psi += v * delta / Lf * latency;
+    // For error terms, use (actual - reference)
+    double epsi = psi - atan(poly_deriv_1(coeffs, px));
+    double cte = poly_eval(coeffs, px) - py;
+    // Update velocity last.
+    v += a * latency;
 
     // Assumble the initiate states.
     Eigen::VectorXd state(6);
-    state << 0,    // Vehicle's x coorindate
-             0,    // Vehicle's y coorindate
-             0,    // Vehicle's heading direction
+    state << px,   // Vehicle's x coorindate
+             py,   // Vehicle's y coorindate
+             psi,  // Vehicle's heading direction
              v,    // Vehicle velocity
              cte,  // Crosstrek error
              epsi; // Heading error
@@ -122,9 +143,13 @@ int main() {
     // Solve MPC problem.
     auto res = mpc.Solve(state, coeffs, deg2rad(25), Lf);
 
+    counter += 1;
+    total_cost += res.cost;
+    printf("Running average of cost: %f\n", total_cost / counter);
+
     json msgJson;
 
-    // Scale the steering angle to [-1, 1]. Negate the sign due to difference with Unity.
+    // Scale the steering angle to [-1, 1]. Negate the sign with conform with Unity.
     msgJson["steering_angle"] = -res.steering / (deg2rad(25) * Lf);
     msgJson["throttle"] = res.throttle;
 
@@ -152,7 +177,7 @@ int main() {
 
 
     auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-    std::cout << msg << std::endl;
+    // std::cout << msg << std::endl;
     // Latency
     // The purpose is to mimic real driving conditions where
     // the car does actuate the commands instantly.
@@ -162,7 +187,7 @@ int main() {
     //
     // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
     // SUBMITTING.
-    //this_thread::sleep_for(chrono::milliseconds(100));
+    this_thread::sleep_for(chrono::milliseconds(latencyMs));
     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
   });
 
