@@ -129,10 +129,12 @@ public:
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
       fg[1 + psi_start + t] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
-      // For error turns, always use (actual - reference).
-      //   cte[t+1]  = (y[t] - f(x[t])) + v[t] * sin(epsi[t]) * dt
+      // For error terms, always use (actual - reference).
+      //   The course material presented cte[t+1] as (y-f) + v*sin(epsi)*dt which
+      //   was a mistake. The change part should be subtracted (y-f).
+      //   cte[t+1]  = (y[t] - f(x[t])) - v[t] * sin(epsi[t]) * dt
       //   epsi[t+1] = (psi[t] - psides[t]) + v[t] * delta[t] / Lf * dt
-      fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
+      fg[1 + cte_start + t] = cte1 - ((y0 - f0) - (v0 * CppAD::sin(epsi0) * dt));
       fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
     }
   }

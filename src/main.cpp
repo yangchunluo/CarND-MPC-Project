@@ -127,7 +127,7 @@ int main() {
     psi += v * delta / Lf * latency;
     // For error terms, use (actual - reference)
     double epsi = psi - atan(poly_deriv_1(coeffs, px));
-    double cte = poly_eval(coeffs, px) - py;
+    double cte = py - poly_eval(coeffs, px);
     // Update velocity last.
     v += a * latency;
 
