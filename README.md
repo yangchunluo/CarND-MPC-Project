@@ -108,4 +108,4 @@ Update velocity last
 
 ### Result
 
-The result of MPC controlled car running one lap of the lake track can be found [here](result.mp4). When the reference speed was set to 100 MPH, the car optimistically slowed down at sharp turns and accelerated passing the turn. I clocked one lap's time was around 36.5 seconds.
+The result of MPC controlled car running one lap of the lake track can be found [here](mpc-result.mp4). When the reference speed was set to 100 MPH, the car optimistically slowed down at sharp turns and accelerated passing the turn. I clocked one lap's time was around 36.5 seconds.
